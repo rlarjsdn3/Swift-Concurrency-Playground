@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "CBFC7E46-AD7D-4A2D-ADD1-4B221486FE28",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Map.xcodeproj",
+      "identifier" : "C78A11072D95623A0019A203",
+      "name" : "Map"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : false,
+      "target" : {
+        "containerPath" : "container:Map.xcodeproj",
+        "identifier" : "C78A11172D95623B0019A203",
+        "name" : "MapTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Map.xcodeproj",
+        "identifier" : "C78A11212D95623B0019A203",
+        "name" : "MapUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
