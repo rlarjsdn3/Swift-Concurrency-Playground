@@ -15,6 +15,7 @@ actor DefaultImageDownloader: ImageDownloader {
 
     func downloadImage(at index: Int) async throws -> Data? {
         do {
+            // print("ImageDownloader: \(Thread.isMainThread)")
             try await Task.sleep(for: .seconds(1))
 
             let url = URL(string: appData.items[index])!

@@ -30,6 +30,7 @@ extension ImageViewModel {
         }
         
         let task = Task {
+            // print("ImageViewModel: \(Thread.isMainThread)")
             defer { imageTasks[indexPath] = nil }
             return try? await imageDownloader.downloadImage(at: indexPath.row)
         }

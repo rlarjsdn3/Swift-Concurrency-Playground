@@ -39,13 +39,15 @@ class ImageViewController: UIViewController {
     // MARK: - Private
     
     private func setupUI() {
-        let layout = UICollectionViewFlowLayout()
-        layout.itemSize = CGSize(
-            width: self.view.frame.width / 3 - 1,
-            height: self.view.frame.width / 3 - 1
-        )
-        layout.minimumLineSpacing = 1
-        layout.minimumInteritemSpacing = 1
+//        let layout = UICollectionViewFlowLayout()
+//        layout.itemSize = CGSize(
+//            width: self.view.frame.width / 3 - 1,
+//            height: self.view.frame.width / 3 - 1
+//        )
+//        layout.minimumLineSpacing = 1
+//        layout.minimumInteritemSpacing = 1
+        let layout = PinterestLayout()
+        layout.delegate = self
         
         collectionView = UICollectionView(
             frame: self.view.bounds,
@@ -85,7 +87,7 @@ extension ImageViewController: UICollectionViewDataSource {
             return .init()
         }
         
-        cell.backgroundColor = .systemGray
+//        cell.backgroundColor = .systemGray
         return cell
     }
 }
@@ -100,6 +102,7 @@ extension ImageViewController: UICollectionViewDelegate {
         let cell = cell as! ImageCell
         
         Task {
+            // print("ImageViewController: \(Thread.isMainThread)")
             if let data = await viewModel.downloadImage(at: indexPath) {
                 let image = UIImage(data: data)!
                 cell.updateCell(with: image)
@@ -117,7 +120,12 @@ extension ImageViewController: UICollectionViewDelegate {
 }
 
 
-private extension ImageViewController {
+extension ImageViewController: PinterestLayoutDelegate {
     
-    
+    func collectionView(
+        _ collectionView: UICollectionView,
+        heightForPhotoAt indexPath: IndexPath
+    ) -> CGFloat {
+        return CGFloat.random(in: 50..<200)
+    }
 }

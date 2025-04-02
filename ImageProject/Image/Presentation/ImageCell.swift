@@ -49,6 +49,9 @@ final class ImageCell: UICollectionViewCell {
 
     private func setupUI() {
         contentView.addSubview(imageView)
+        contentView.backgroundColor = .systemGray
+        contentView.layer.cornerRadius = 10
+        contentView.clipsToBounds = true
         imageView.frame = contentView.bounds
     }
     
