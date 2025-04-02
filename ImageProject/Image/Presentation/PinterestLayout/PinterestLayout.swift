@@ -16,9 +16,14 @@ import UIKit
 
 final class PinterestLayout: UICollectionViewFlowLayout {
     
-    weak var delegate: PinterestLayoutDelegate?
+    // MARK: - Delegate
     
-    private let numberOfColumns = 3
+    weak var delegate: (any PinterestLayoutDelegate)?
+    
+    
+    // MARK: - Properties
+    
+    private let numberOfColumns: Int
     private let cellPadding: CGFloat = 6
     
     private var cache: [UICollectionViewLayoutAttributes] = []
@@ -33,9 +38,31 @@ final class PinterestLayout: UICollectionViewFlowLayout {
     private var contentHeight: CGFloat = 0
     
     
+    // MARK: - Intializer
+    
+    init(
+        _ numberOfColumns: Int = 2,
+        delegate: (any PinterestLayoutDelegate)?
+    ) {
+        self.delegate = delegate
+        self.numberOfColumns = numberOfColumns
+       
+        super.init()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    
+    // MARK: - Content Size
+    
     override var collectionViewContentSize: CGSize {
         return CGSize(width: contentWidth, height: contentHeight)
     }
+    
+    
+    // MARK: - Prepare
     
     override func prepare() {
         print(#function)
@@ -79,9 +106,15 @@ final class PinterestLayout: UICollectionViewFlowLayout {
             contentHeight = max(contentHeight, frame.maxY)
             yOffset[column] = yOffset[column] + height
             
-            column = column < (numberOfColumns - 1) ? (column + 1) : 0
+            if let minYOffset = yOffset.min(),
+               let targetColumn = yOffset.firstIndex(of: minYOffset) {
+                column = targetColumn
+            }
         }
     }
+    
+    
+    // MARK: - Layout Attributes for Elements
     
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         print(#function)

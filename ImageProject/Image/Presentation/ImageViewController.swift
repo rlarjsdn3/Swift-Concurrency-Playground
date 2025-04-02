@@ -39,15 +39,7 @@ class ImageViewController: UIViewController {
     // MARK: - Private
     
     private func setupUI() {
-//        let layout = UICollectionViewFlowLayout()
-//        layout.itemSize = CGSize(
-//            width: self.view.frame.width / 3 - 1,
-//            height: self.view.frame.width / 3 - 1
-//        )
-//        layout.minimumLineSpacing = 1
-//        layout.minimumInteritemSpacing = 1
-        let layout = PinterestLayout()
-        layout.delegate = self
+        let layout = PinterestLayout(delegate: self)
         
         collectionView = UICollectionView(
             frame: self.view.bounds,
