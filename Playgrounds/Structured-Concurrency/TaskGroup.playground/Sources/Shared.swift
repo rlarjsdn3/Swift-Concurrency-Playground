@@ -7,20 +7,36 @@
 
 import UIKit
 
-public let url = "https://picsum.photos/200/300?grayscale"
+public struct Post {
+    let userId: Int
+    let id: Int
+    let title: String
+    let body: String
+}
+extension Post: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case userId
+        case id
+        case title
+        case body
+    }
+}
+extension Post: Sendable {
+}
 
-public func downloadImage(from url: String) async throws -> UIImage {
-    let url = URL(string: url)!
+
+public func fetchPost(for id: Int) async throws -> Post {
+    let url = URL(string: "https://jsonplaceholder.typicode.com/posts/\(id)")!
     
     do {
         try await Task.sleep(for: .seconds(1))
         
         let (data, _) = try await URLSession.shared.data(from: url)
         
-        guard let image = UIImage(data: data) else {
-            throw URLError(.cannotDecodeContentData)
+        guard let post = try? JSONDecoder().decode(Post.self, from: data) else {
+            throw URLError(.badURL)
         }
-        return image
+        return post
     } catch {
         if let _ = error as? CancellationError {
             print("⚠️ 작업이 취소되었습니다.")
@@ -29,4 +45,9 @@ public func downloadImage(from url: String) async throws -> UIImage {
             throw URLError(.badURL)
         }
     }
+}
+
+public func cachingPost(id: Int) async throws -> Void {
+    try await Task.sleep(for: .seconds(1))
+    return
 }
