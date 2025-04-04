@@ -184,21 +184,21 @@ func doAnotherSomething() async {
 
 //: ---
 //: ### 예제 4
-func printMagicNumber(_ number: Int) async throws -> String {
-    try? await Task.sleep(for: .seconds(1))
-    return "🧙‍♂️ 마법의 수는 \(number)입니다!"
+func printMagicNumber(_ number: Int) async throws {
+    print("🧙‍♂️ 마법의 수는 \(number)입니다!")
 }
 
 Task {
-    let message1 = try? await printMagicNumber(1)
-    let message2 = try?await printMagicNumber(2)
+    try? await printMagicNumber(1)
+    try?await printMagicNumber(2)
     
     Task {
-        let message3 = try?await printMagicNumber(3)
-        let message4 = try?await printMagicNumber(4)
+        try? await Task.sleep(for: .seconds(1))
+        try?await printMagicNumber(3)
+        try?await printMagicNumber(4)
     }
     
-    let message5 = try?await printMagicNumber(5)
+    try?await printMagicNumber(5)
 }
 
 // Print  "🧙‍♂️ 마법의 수는 1입니다!"
