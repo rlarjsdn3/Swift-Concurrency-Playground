@@ -1,2 +1,2 @@
-[Task](Task.playground/Contents.swift)
-[Detached Task](Detached_Task.playground/Contents.swift)
+[Task](Task.md)
+[Detached Task](Detached_Task.md)
