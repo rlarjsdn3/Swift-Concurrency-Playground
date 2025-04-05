@@ -1,8 +1,8 @@
 import UIKit
 
 //: ---
-//: ## async-let
-//: ### 구조적 동시성, 비동기 함수를 병렬로 실행하는 첫 번째 방법
+//: # async-let
+//: ## 구조적 동시성, 비동기 함수를 병렬로 실행하는 첫 번째 방법
 //: ---
 //: **구조적 동시성(Structured Concurrency)**은 동시에 실행되는 여러 작업(`Task`)을
 //: **작업 트리(task tree)** 형태로 계층적으로 구성하여, 상위 작업이 하위 작업을 쉽게 **관리**할 수 있도록 도와줍니다.
@@ -106,10 +106,12 @@ Task { await downloadImagesParallel() }
 //: 그 안에서 선언된 세 개의 `async let` 이미지 다운로드 작업을 **하위 작업(Child Tasks)**으로 구성하는 **작업 트리(Task Tree)**를 생성합니다.
 
 //: ---
+//:
 //: 📦 downloadImagesParallel()  ← 상위 작업 (Parent Task)
 //:  ├── 🧵 async let image1 = downloadImage(from: url)  ← 하위 작업 1
 //:  ├── 🧵 async let image2 = downloadImage(from: url)  ← 하위 작업 2
 //:  └── 🧵 async let image3 = downloadImage(from: url)  ← 하위 작업 3
+//:
 //: ---
 
 //: 이때 상위 작업은 **모든 하위 작업이 완료되어야** 종료될 수 있으며,

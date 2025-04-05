@@ -1,8 +1,8 @@
 import UIKit
 
 //: ---
-//: ## TaskGroup
-//: ### 구조적 동시성, 비동기 함수를 병렬로 실행하는 두 번째 방법
+//: # TaskGroup
+//: ## 구조적 동시성, 비동기 함수를 병렬로 실행하는 두 번째 방법
 //: ---
 //: 앞서 우리는 `async let`을 사용해 **동시적 바인딩(concurrent binding)**으로
 //: 여러 하위 작업을 병렬(parallel)로 실행하는 방법을 살펴보았습니다.
@@ -96,6 +96,30 @@ Task { await fetchPosts(until: 100) }
 //: 중요한 점은, 작업이 추가된 순서대로 루프를 도는 것이 아니라, 완료된 순서대로 처리된다는 것입니다. 즉, 더 빨리 끝나는 작업이 먼저 루프에 전달되어 실행됩니다.
 //:
 //: 이 `for-await-in` 구문은 Swift에서 제공하는 **비동기 시퀀스(Asynchronous Sequence)**의 한 예이며, 이에 대한 자세한 내용은 [애플 공식 문서](https://developer.apple.com/documentation/swift/asyncsequence)를 참조하세요.
+
+
+//: 작업 그룹(TaskGroup)과 동시적 바인딩(async let)은 작업을 병렬로 실행한다는 공통점이 있지만, 중요한 차이점이 있습니다.
+//: `async let`은 작업 결과를 소비하지 않으면 해당 작업이 곧바로 취소되지만, 작업 그룹은 하위 작업의 결과를 소비하지 않더라도 작업이 자동으로 취소되지 않습니다.
+//:
+//: 이는 작업 그룹이 포크-조인(Fork-Join) 패턴을 따르기 때문입니다.
+//: 포크(fork)된 작업은 조인(join) 여부와 상관없이 독립적으로 실행되며, 상위 작업은 하위 작업이 모두 완료될 때까지 대기합니다.
+
+//: ---
+//: 예제 3
+func fetchPostsAndReturnVoid(until id: Int) async throws -> Void {
+    await withTaskGroup(of: Post?.self) { group in
+        for id in 0..<id {
+            group.addTask {
+                try? await fetchPost(for: id)
+            }
+        }
+        
+        return []
+    }
+}
+Task { await fetchPosts(until: 10) }
+//: ---
+
 
 
 

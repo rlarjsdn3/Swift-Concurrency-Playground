@@ -1,2 +1,2 @@
-[async/await](async-await.playground/Contents.swift)
+[async-let](async-let.playground/Contents.swift)
 [TaskGroup](TaskGroup.playground/Contents.swift)
