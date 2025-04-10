@@ -1,169 +1,492 @@
 ## Actor
-**특정 작업 컨텍스트 내에 바인딩하고 읽을 수 있는 값**
+**동시성 문제를 원천적으로 차단하는 타입**
 
 ---
 
-### 액터(Actor)
+액터(actor)는 Swift에서 내부 저장 프로퍼티에 대한 데이터 경합(data race) 문제를 언어 차원에서 해결해주는 새로운 타입입니다. 클래스와 달리 액터는 개발자가 직접 **락(lock)** 이나 **직렬 디스패치 큐(serial dispatch queue)** 를 구현하지 않아도, **공유된 가변 상태(shared mutable state)** 에 대한 동기화(synchronization)를 Swift가 자동으로 보장합니다.
 
-`Actor`는 
+액터는 클래스와 마찬가지로 힙(heap) 메모리 영역에 저장되는 **참조 타입**입니다. 프로퍼티, 메서드, 이니셜라이저, 서브스크립트를 정의할 수 있으며, 프로토콜 채택과 확장(extension)도 지원합니다. 다만, 액터는 상속이 불가능하기 때문에 구조체처럼 `final`, `override` 그리고 편의 이니셜라이저(convenience initializer)를 사용할 수 없습니다. 
 
-액터는 공유된 가변 상태를 위한 동기화 메커니즘을 제공합니다. 액터는 고유한 상태를 가지며, 그 상태는 프로그램의 다른 부분으로부터 격리되어 있습니다. 해당 상태에 접근하는 유일한 방법은 액터를 통해서만 가능하며, 액터를 통해 접근할 때마다 액터의 동기화 메커니즘이 동작하여 다른 코드가 동시에 액터의 상태에 접근하지 못하도록 보장합니다.
+액터를 사용하면 개발자가 직접 동기화 메커니즘을 구현할 필요가 사라집니다. Swift는 여러 작업 컨텍스트(스레드)가 액터 내부 상태에 동시에 접근하려는 시도를 자동으로 감지하고, 한 번에 하나의 작업만 실행되도록 직렬화하여 **데이터 경합(data race)** 의 가능성을 원천적으로 차단합니다. 이로 인해 직접 락(lock)이나 큐를 다루면서 생길 수 있는 구현 실수를 예방할 수 있으며, 더욱 효율적이고 스레드에 안전한 코드를 작성할 수 있습니다. 액터는 참조 타입으로, 여러 작업 컨텍스트에서 공유될 수 있지만, Swift는 내부적으로 이를 순차 처리함으로써 동시 접근으로 인한 문제를 근본적으로 해결합니다.
 
-이것은 우리가 직접 락이나 직렬 디스패치 큐를 사용할 때 얻을 수 있는 상호 배제(mutual exclusion)와 동일한 효과를 줍니다. 하지만, 액터를 사용하면 Swift가 이를 기본적으로 보장합니다. 동기화를 깜빡하는 일이 발생할 수 없으며, 만약 그렇게 시도하면 Swift는 컴파일 오류를 발생시켜 이를 막습니다.
+액터는 (명시적으로 `nonisolated` 키워드를 적지 않는다면) 프로그램의 나머지 부분으로부터 **내부 프로퍼티와 메서드를 격리(isolate)** 하여, 상태를 안전하게 보호합니다. 외부 코드에서 액터의 내부 상태에 접근하거나 수정하려면, 반드시 비동기(async) 방식으로 접근해야 하며 `await` 키워드를 사용해야 합니다. 이러한 제한은 동시에 여러 작업 컨텍스트가 동일한 액터에 접근하려고 시도하더라도, 작업들을 순차적으로 처리하여 충돌 없이 안정적인 상태 관리를 가능하게 합니다. 즉, 다른 작업은 현재 작업이 완료될 때까지 잠시 대기하게 되어, 동시성으로 인한 문제를 방지할 수 있습니다.
 
-- 참조 타입 / 속성, 메서드, 이니셜라이저, 서브스크립트를 가질 수  있음 / 프로토콜 채태 가능 / 확장 가능 / Sendable 프로토콜과 Actor 프로토콜 암시적 채택
-- 단, 상속은 안됨
+엑터는 `actor` 키워드를 사용해 선언하며, 기본적인 구조와 사용법은 클래스와 유사합니다. 단, 동시성 보호를 위해 액터는 몇 가지 제약과 특수한 동작을 가집니다.
+
+```swift
+actor Counter {
+    var value: Int = 0
+    
+    func increment() -> Int {
+        value += 1
+        return value
+    }
+}
+```
+
+```swift
+let counter = Counter()
+Task { _ = await countere.incrment() }
+```
+
+이렇듯, 액터 외부에서 내부 메서드에 접근하려면 반드시 `await` 키워드를 사용해야 합니다. 이는 액터의 격리된 상태에 안전하게 접근하도록 Swift가 강제하는 규칙입니다. 아래는 Counter 액터를 확장하여 `resetSlowly(to:)` 메서드를 추가한 예제입니다.
+
+```swift
+extension Counter {
+    func resetSlowly(to newValue: Int) {
+        value = 0
+        
+        for _ in 0..<newValue {
+            self.increment()
+        }
+        assert(value == newValue)
+    }
+}
+```
+
+`resetSlowly(to:)` 메서드는 액터 내부에 정의된 메서드이므로, 같은 액터의 다른 메서드인 `increment()`를 동기적으로 호출할 수 있습니다. 즉, Swift는 동일한 액터에 격리된 메서드 간 호출에 대해 `await`를 요구하지 않습니다. 같은 액터 내부에서는 비동기 처리 없이도 안전하게 상태를 공유하고 변경할 수 있습니다.
 
 
-- 참조 타입으로 힙 메모리 영역에 저장되어 여러 스레드에서 접근할 수 있지만, 한번에 하나의 스레드에서만 접근할 수 있도록 처리해 스레드에 안전하게 처리해줌
+```swift
+func increment(by count: Int, onto counter: Counter) async {
+    var value = await counter.value
+    value += count
+    await counter.value = value // 🔴
+}
+```
+
+아울러, 외부 작업 컨텍스트에서 액터의 내부 상태를 바꾸길 원하는 경우, 액터의 격리 메서드에 바꿀 데이터를 전달하는 방식으로 구현해야 합니다. `await counter.value = ...`와 같이 해당 프로퍼티에 접근해 직접 새로운 값을 할당할 수 없습니다. 아래 예제는 위 예제의 문제를 해결한 코드입니다.
+
+```swift
+// 1️⃣ Counter 액터 내부에 상태를 변경하는 메서드를 구현
+extension Counter {
+    func increment(by count: Int) {
+        var value = self.value
+        value += count
+        self.value = value
+    }
+}
+
+// 2️⃣ 전역 함수를 특정 액터에 격리시켜 구현
+func increment(by count: Int, onto counter: isolated Counter) {
+    var value = counter.value
+    value += count
+    counter.value = value
+}
+```
+
+1️⃣번 코드는 Counter 액터 내부에 increment(by:) 메서드를 정의하고, 해당 메서드를 통해서만 상태를 변경하도록 구성한 예제입니다. 이는 가장 일반적이고 권장되는 방식으로, 액터의 상태를 안전하게 보호할 수 있습니다. 2️⃣번 코드는 increment(by:counter:)라는 전역 함수를 정의한 뒤, 이를 특정 액터 인스턴스에 격리시키는 방법을 보여줍니다. 이때 전역 함수의 액터 타입 매개변수 앞에 isolated 키워드를 붙이면, 해당 함수는 마치 그 액터 내부에 정의된 격리 메서드처럼 동작하게 됩니다. 즉, 외부에 정의되어 있어도 액터의 격리 컨텍스트 안에서 실행되며, 내부 상태에 직접 접근할 수 있는 특권을 갖습니다.
 
 
+그런데 액터는 내부 상태에 대해 어떻게 상호 배제를 보장할 수 있을까요? 액터는 모든 작업을 순차적으로 처리하는 직렬 실행자(serial executor)를 가집니다. 외부 작업 컨텍스트에서 액터의 내부 상태에 접근하거나 메서드를 호출하면 해당 작업은 실행자에 _Job_으로 등록되어 직렬화되며, 한 번에 하나의 작업만 처리하게 함으로써 데이터 경합(data race)의 가능성을 원천적으로 차단합니다. 이 직렬 실행자는 디스패치 직렬 큐와 유사하지만 단순한 선입선출(FIFO) 방식은 아니며, 작업의 우선순위를 파악해 실행 순서를 재조정할 수 있는 유연한 구조를 가집니다. 
 
-- 액터는 프로그램의 나머지 부분으로부터 내부 프로퍼티나 메서드를 격리(isolated)시켜서 내부 상태를 보호함, 액터 외부에서 액터 내부에 접근하려면 항상 비동기(async)적으로 접근해야 함
+> 💡 **Note:** 액터는 암시적으로 `Actor` 프로토콜을 채택합니다. `Actor` 프로토콜은 **UnownedSerialExecutor** 타입의 `unownedExecutor` 프로퍼티를 요구하며, 이는 액터가 작업을 스케줄링해야 할 때 Swift 런타임에 의해 암시적으로 접근됩니다. 이러한 접근은 다른 작업과 합쳐지거나, 제거되거나, 재배치될 수 있으며, 반드시 필요한 상황이 아니어도 삽입될 수 있습니다. 
 
-- 해당 액터에 접근할 때는 `await` 키워드를 붙여야 함. 이는 여러 스레드에게 해당 액터에 동시에 접근할 때, 다른 작업들을 잠시 대기(await)하게 만들기 위함임 (액터 외부에서 액터 내부에 접근하려면 항상 비동기(async)적으로 접근해야 함)
+> 💡 **Note:** 액터는 `Sendable` 프로토콜을 채택합니다.
 
-- 그런데 어떻게 액터가 상호 배제를 도와주는 걸까? 외부에서 액터에 접근할 때(= 공유 가변 상태에 접근할 때) 직렬 실행자(serial executor)를 통해 실행을 모두 직렬화시킴, (즉, 한번에 하나씩 실행)
-- '직렬'이라는 단어가 붙었다고, 이게 직렬 큐를 의미하는 건 아님. FIFO로 동작하는 게 아니다.
-
-- 데이터베이스나 캐시 등의 목적으로 액터를 주로 사용
-
-
-
-- 작업(Task)과 마찬가지로 액터도 독립적인 비동기 컨텍스트로 간주될 수 있음. Task에서 액터로 데이터를 공유할 때도 마찬가지로 Sendable 프로토콜을 준수하는 타입만 공유할 수 있음
-
+ 
+ 
 
 ### 액터 격리(Actor Isolation)
 
-- `격리`시킨다는 게 무슨 의미일까? 액터 격리(혹은 작업 격리)는 액터의 내부 상태를 프로그램의 나머지 부분으로 보호하는 메커니즘임.
+내부 프로퍼티와 메서드를 액터에 격리한다는 것은 무슨 의미일까요? 액터 격리(actor isolation)는 액터 내부의 상태(프로퍼티 및 메서드)를 프로그램의 나머지 부분으로부터 보호한다는 의미입니다. 즉, 해당 상태는 특정 실행 컨텍스트에 단독으로 소속되어 있으며, 여러 스레드에서 동시에 접근하는 일이 없도록 액터에게만 단독 접근 권한을 부여하는 것을 의미합니다.
 
- 데이터가 여러 스레드에서 동시에 접근하지 않도록 해당 데이터에 대한 접근 권한을 단독으로 취한다는 의미임. 액터에 격리된 상태는 오직 해당 액터를 통해서만 접근이 가능함. 
- 
- 외부에서 비동기적으로 액터에 접근하면 액터의 직렬 실행자에 작업이 배정됨
- 
- ```swift
- 
- ```
- 
-특정 액터에 격리당한 프로퍼티나 메서드는 액터 내부에서만 동기적으로 접근이 가능함. 이때 FIFO로 동작하는 게 아니라 우선순위의 영향을 받아 Repriority가 될 수 있음 (FIFO인 직렬 디스패치 큐는 우선순위 역전이 발생하면 앞서 위치한 모든 작업의 우선순위를 올리는 방식으로 해결하지만, 이는 근본적인 해결책이 아님)
+액터에 상태가 격리되어 있다는 것은 그 상태에 접근할 수 있는 작업은 액터가 사용하는 스레드(실행 컨텍스트)에서만 수행된다는 뜻이며, 다른 스레드에서 실행되는 다른 작업 컨텍스트에서는 직접 접근이 불가능합니다. 액터 격리는 동시성 환경에서의 안정성을 확보하기 위한 개념이며, 결국 특정 상태나 작업이 하나의 실행 흐름에만 속하도록 제한함으로써 충돌 없는 안전한 실행을 보장합니다.
+
+
+```
+┌──────────────────────────────┐
+│       프로그램의 나머지 부분       │
+│  ┌────────────────────────┐  │
+│  │  Task A                │  │
+│  │  await counter.inc()   │ ─│───┐  
+│  └────────────────────────┘  │   │      
+│                              │   │ 👷🏼‍♀️ 작업 요청 전달!
+│  ┌────────────────────────┐  │   │
+│  │  Task B                │  │   │
+│  │  await counter.get()   │ ─│─┐ │
+│  └────────────────────────┘  │ │ │ 👷🏻 작업 요청 전달!
+└──────────────────────────────┘ │ │
+                                 ▼ ▼
+┌─────────────────────────────────────┐
+│            actor Counter            │
+│─────────────────────────────────────│
+│  (격리된 내부 상태)                     │
+│  var value: Int                     │
+│                                     │
+│  func increment() -> Int            │
+│  func get() -> Int                  │
+│                                     │
+│  🔒 내부 상태는 액터만 직접 접근 가능       │
+└─────────────────────────────────────┘
+            ▼
+┌──────────────────────┐
+│    Serial Executor   │  ◀─ 작업들을 순차적으로 처리함
+└──────────────────────┘
+```
+
+> 💡 **Note:** 액터 격리는 작업 격리(task isolation)와 본질적으로 동일한 개념입니다!
+
+액터 격리의 핵심은 서로 다른 격리 컨텍스트에서 액터 내부 상태에 접근하려는 시도가 있을 때, 해당 작업을 액터의 직렬 실행자에 등록해 순차적으로 실행되도록 함으로써, 데이터 경합 없이 안전한 접근을 보장하는 데 있습니다. 즉, **격리된 객체끼리는 직접 상태를 건드리지 않고 작업 요청만 비동기적으로 전달** 하며, 이 요청은 액터 내부에서 하나씩 정해진 순서에 따라 실행되기 때문에 잠재적인 동시성 문제가 자연스럽게 사라지는 구조입니다. 
+
+
+##### Non-Sendable 클로저(Closure)
+
+```swift
+struct Book: Sendable {
+    let title: String
+    let pages: Int
+}
+actor LibraryAccount {
+    let booksOnLoan: [Book] = []
+    func read() -> Int {
+        return booksOnLoan.reduce(0) { book in
+            readSome(book)
+        }
+    }
+}
+```
+
+클로저는 하나의 함수 내에 정으된 작은 함수들로, 클로저도 마찬가지로 액터에 격리되거나 비격리(isolated)될 수 있습니다. 위 예제는 우리가 대출한 책의 총 페이지 수를 계산해 반환하려고 합니다. `reduce` 호출에는 지금까지 빌린 책의 페이지 수의 총 합을 반환하는 클로저가 있습니다. 그리고 해당 클로저 내부에 _getPages()_ 호출에는 `await`이 없다는 점을 주목하세요. 이는 해당 클로저가 액터에 격리된 함수인 _totalPagesBorrowed()_ 내부에서 생성되었기 때문이며, 따라서 해당 클로저 자체도 액터에 격리되어 있기 때문입니다.
+
+
 
 #### 비격리(non-Isolated)
 
-- '격리'라는 개념이 있다면 '비격리(non-isolated)'라는 개념도 존재하지 않을까? 비격리는 - 격리와 반대로 - 액터의 내부 상태를 프로그램의 나머지 부분으로부터 보호하지 않겠다는 의미임. 즉, 외부에서 언제든지 동기적으로 비격리된 메서드 및 프로퍼티에 접근이 가능함
+액터가 격리 상태를 갖는다면, 당연히 비격리(non-isolated) 상태도 가질 수 있습니다. 비격리는 액터 내부의 상태를 프로그램의 나머지 부분으로부터 보호하지 않겠다는 의미입니다. 즉, 해당 상태는 특정 실행 컨텐스트에 소속되어 있지 않으며, 여러 스레드(작업 컨텍스트)에서 아무런 제약없이 동시에 접근할 수 있습니다.
 
-- 보호될 필요가 없는 - 데이터 경합의 가능성이 없는 데이터의 경우 - 비격리 처리 가능
-- 액터 내부의 데이터에 접근하지 않는 메서드도 비격리 처리 가능 
-
-- 프로퍼티 및 메서드를 비격리처리하면, 해당 코드는 액터 내부에 위치하지만, nonisolated 메서드는 액터 외부에 있는 것으로 간주되기 때문에 액터의 변경 가능한 상태를 참조할 수 없습니다.
-
-
-- 비격리가 필요한 조금 더 다양한 예제를 살펴보겠음, Equtable 프로토콜을 채택하면 정적 동등성 메서드을 구현해야 하는데, 해당 정적 메서드의 경우 인스턴스 데이터에 접근하는 게 아니기 때문에 액터에 격리되면 안됨. 격리될 필요가 없음
+액터의 프로퍼티나 메서드를 비격리로 만들 때는 해당 선언 앞에 `nonisolated` 키워드를 붙이면 됩니다. 이 키워드는 주로 `let`으로 선언되어 불변(immutable)이며 보호가 필요 없는 프로퍼티나 액터 내부 상태에 접근하지 않는 메서드에 적용됩니다. 동시 접근에도 데이터 경합(data race)이 발생할 가능성이 없는 코드에 굳이 액터 격리를 유지하면서 `await`으로 접근한다면, 불필요한 리소스 낭비로 이어질 수 있습니다. 따라서, 이러한 경우에는 `nonisolated`를 활용해 성능을 높일 수 있습니다.
 
 ```swift
+actor Counter {
+    var value = 0
+    nonisolated let label: String = 123
+    
+    nonisolated func getLabel() -> String {
+        return label
+    }
+    nonisolated func getDoulbedValue() -> Int {
+        return await self.value * 2
+    }
+}
 
+let counter = Counter()
+_ = counter.getLabel()
+Task { await counter.getDoulbedValue() }
 ```
 
-- 그리고, 외부에서 동기적으로 호출되어야 하는 메서드의 경우도 비격리로 처리해야 함. 예를 들어, Hashable의 hash(into:) 메서드의 경우 외부에서 동기적으로 호출되어야 하기 때문에 반드시 비격리/동기 함수로 구현해야 함, 따라서 비격리 처리해야 함
+액터 내부에 비격리로 선언된 메서드는 외부에서 `await` 없이 자유롭게 호출할 수 있습니다. 또한, 이러한 메서드는 액터 내부의 비격리 프로퍼티에도 제약 없이 접근할 수 있습니다. 하지만 중요한 점은 비격리된 프로퍼티나 메서드는 액터 내부에 정의되어 있더라도, 실질적으로 액터 외부에 구현된 것처럼 간주한다는 것입니다. 따라서, 비격리된 메서드가 격리된 상태에 접근하려는 경우, 이는 외부에서 액터 내부에 접근을 시도하는 것과 동일하게 처리되며 반드시 `await`을 사용해 비동기적으로 접근해야 합니다.
+
+
+
+##### Hashable 프로토콜
 
 ```swift
-
+extension Counter: Hashable {
+    nonisolated func hash(into hasher: inout Hasher) {
+        hasher.combine(self.label)
+    }
+}
 ```
 
-- reduce 호출에는 읽기를 수행하는 클로저가 있습니다. readSome 호출에 await이 없다는 것을 주목하세요. 이는 해당 클로저가 액터에 격리된 함수인 read 내부에서 생성되었기 때문이며, 클로저 자체도 액터에 격리되어 있기 때문입니다.
+**Counter**를 **Hashable** 프로토콜을 따르도록 만들기 위해서는 `hash(into:)` 메서드를 구현해야 합니다. 하지만 이 메서드를 액터 내부의 격리된 컨텍스트에서 그대로 구현하면 문제가 발생합니다. 이유는 `hash(into:)`가 일반적으로 외부 모듈에서 동기적으로 호출되며, 비동기 컨텍스트에서 실행할 수 없기 때문입니다. 따라서 이 메서드를 `nonisolated`으로 선언하여, 외부에서 동기적으로 호출 가능하게 만들어야 합니다. 이때 접근하는 프로퍼티 역시 비격리 상태에 있어야 합니다.
+
+
+##### Equatable 프로토콜
 
 ```swift
+extension Counter: Equtable {
+    nonisolated static func == (lhs: LibraryAccount, rhs: LibraryAccount) -> Bool {
+        return lhs.label == rhs.label
+    }
+}
+```
 
+**Counter** 액터를 **Equatable** 프로토콜을 따르도록 만들어봅시다. 정적 메서드 ==는 두 인스턴스의 레이블(label) 값을 기준으로 동등성을 비교합니다. ==는 정적(static) 메서드이므로, 액터 인스턴스의 격리된 상태에 직접 접근하지 않습니다. 따라서 이 정적 메서드는 액터에 격리될 필요가 없습니다.
+
+
+##### Detached Task
+
+```swift
+extension Counter {
+    func increment(times: any UnsignedInteger) {
+        Task.detached {
+            for _ in 0..<times {
+                await self.increment()
+            }
+        }
+    }
+}
+```
+
+액터 내부에서 **Detached Task**를 생성하는 경우, 이 **Detached Task**는 액터를 포함한 어떤 자원도 상속받지 않는 독립적인 작업 컨텍스트입니다. 따라서 이 작업 컨텍스트는 액터에 격리되지 않습니다. 그렇기 때문에 이 작업 컨텍스트 안에서 액터 내부의 상태에 접근하려면, 반드시 `await`을 사용해 비동기적으로 접근해야 합니다.
+
+
+
+
+
+### 액터의 재진입성(Actor Re-entrancy)
+
+액터는 비동기적으로 작업을 처리하는 동안 **재진입성(re-entrancy)**라는 중요한 특성을 가집니다. 즉, 액터 내부의 메서드가 실행되는 도중 `await`을 만나 일시 중단(suspend)되고 다시 재개(resume)가 되는 사이에, 다른 작업이 해당 액터에 진입하여 내부 상태를 변경할 수 있는 여지가 존재합니다. 이로 인해 `await` 이전과 이후에 액터의 내부 상태가 예상과 달리 달라질 수 있으며, 그 결과로 미묘한 버그나 예기치 못한 동작이 발생할 수 있습니다. 
+
+따라서 액터 내부에서 비동기 메서드를 사용할 때는 특히 주의해야 합니다. 특정 메서드에 여러 재진입 작업이 동시에 발생할 수 있다는 점을 고려하여, 무엇이 언제 실행되고, 어떤 상태가 유지되어야 하는지를 명확히 이해하고 설계해야 합니다. 어떤 경우에는 재진입이 성능에만 영향을 줄 뿐, 시스템에는 영향을 주지 않을 수 있습니다. 하지만 액터의 내부 상태에 따라 로직이 달라지거나, 상태 일관성이 중요한 작업에서는 재진입 중 상태 변경이 심각한 문제를 일으킬 수 있습니다.
+
+따라서 액터 내부에서 일시 중단될 수 있는 메서드를 호출하기 전, `await` 이전의 코드 흐름에서 액터의 내부 상태가 변하지 않을 것이라는 가정(assumption)을 했는지 반드시 되돌아보고, 그 가정이 여전히 유효한지 `await` 이후에 반드시 확인해야 합니다.
+
+예를 들어, 동일한 URL의 이미지를 다운로드받고 캐시로 저장해 반환하는 액터가 있다고 가정해보겠습니다. `await` 중 다른 작업이 동일 URL로 접근해 상태를 바꾼다면, 캐시 무효화, 중복 다운로드 등의 문제가 발생할 수 있습니다.
+
+```swift
+actor ImageDownloader {
+    private var cache: [URL: UIImage] = [:]
+    
+    func image(from url: URL) async throws {
+        if let cachedImage = cache[url] {
+            return cachedImage
+        }
+        
+        let image = try await downloadImage(from: url)
+        
+        cache[url] = image
+        return cache[url]
+    }
+}
+```
+
+```
+-----------------------------------------------------------------------
+| downloadImage1️⃣ | 💥suspend --- | downloadImage2️⃣ | 💥suspend --- ➡️
+-----------------------------------------------------------------------
+
+-----------------------------------------------------------------------
+➡️ --- ✨resume | downloadImage2️⃣ | --- ✨resume | downloadImage1️⃣ |
+-----------------------------------------------------------------------
+```
+
+먼저, 외부 작업 컨텍스트에서 첫 번째 이미지 다운로드 작업(downloadImage1️⃣)이 액터에 요청되었다고 가정해봅시다. 해당 URL에 대한 이미지가 캐시에 없는 것을 확인한 뒤, 이미지를 다운로드하기 위해 일시 중단 상태에 들어갑니다. 이 상태에서 액터는 첫 번째 작업이 다운로드한 이미지를 넘겨주기를 기다리면서, 동일한 URL에 대한 두 번째 이미지 다운로드 작업(downloadImage2️⃣)을 처리할 수 있습니다. 두 번째 작업 또한 캐시에 이미지가 없음을 확인하고, 동일하게 다운로드 작업을 시작하면서 또다시 일시 중단됩니다. 그 후, 두 번째 작업이 먼저 재개되어 이미지를 다운로드한 뒤, "www.example.com/image"라는 URL을 키로 캐시에 저장합니다. 이후 첫 번째 작업도 재개되어 다운로드를 완료하고, 같은 URL에 이미지를 다시 저장하게 됩니다. 결과적으로, 첫 번째 작업이 두 번째 작업의 결과를 덮어쓰게 되는 현상이 발생합니다.
+
+이것이 바로 액터의 재진입성 때문에 생길 수 있는 미묘한 버그이며, 일종의 **저수준 데이터 경합(data race)** 이라 할 수 있습니다. 비록 Swift의 액터가 데이터 경합을 방지해주는 구조를 갖고 있지만, `await`에 의한 재진입성은 개발자가 직접 고려해야 할 영역입니다.
+
+이러한 버그를 방지하기 위해서는 다음과 같은 접근이 필요합니다:
+
+1. `await` 이후 재진입 시, 해당 데이터가 변경되었을 가능성을 고려하고 이를 감지하도록 메서드를 설계해야 합니다.
+
+2. 작업 상태를 저장하는 방식을 통해, 두 번째 이미지 다운로드 작업 중에 첫 번째 작업이 이미 실행 중이라는 사실을 인지할 수 있게 구성해야 합니다. 
+
+이처럼 액터 내부에서 `await`을 포함한 작업을 설계할 때는 재진입 가능성을 항상 염두해두고, 그로 인한 상태 변화를 면밀히 검토해야 합니다.
+
+```swift
+1️⃣ `await` 이후 재진입 시, 해당 데이터가 변경되었을 가능성을 고려
+actor ImageDownloader {
+    private var cache: [URL: UIImage] = [:]
+    
+    func image(from url: URL) async throws {
+        if let cachedImage = cache[url] {
+            return cachedImage
+        }
+        
+        let image = try await downloadImage(from: url)
+        
+        cache[url] = cache[url, default: image]
+        return cache[url]
+    }
+}
 ```
 
 
-- 액터 내부에서 Detached Task를 만드는 경우, Detached Task는 어느 자원을 상속받지 않는 독립적인 작업 컨텍스트이기 때문에, 이 클로저는 액터에 속할 수 없으며, 그래서 해당 클로저는 액터에 격리되지 않습니다. 그렇지 않으면 데이터 경합이 발생할 수 있습니다. 
+```swift
+2️⃣ 작업 상태를 저장하는 방식
+actor ImageDownloader {
+    private var cache: [URL: UIImage] = [:]
+    
+    enum CacheEntry {
+        case inProgress(Tas<UIImage, Error>)
+        case completed(UIImage)
+    }
+    
+    func image(from url: URL) async throws {
+        if let cacheEntry = cache[url] {
+            switch cacheEntry {
+                case let .completed(image):
+                    return image
+                case let .inProgress(task):
+                    return try await task.value
+            }
+        }
+        
+        let task = Task {
+            try await downloadImage(from: url)
+        }
+        
+        cache[url] = .inProgress(task)
+        
+        do {
+            let image = try await task.value
+            cache[url] = .completed(image)
+            return image
+        } catch {
+            cache[url] = nil
+            throw error
+        }
+    }
+}
+```
+
+액터의 재진입성이라는 특징 덕분에 액터에 요청된 작업들은 반드시 선입선출 순서대러 실행할 필요가 없게 됩니다. 즉, 이런 재진입성 덕분에 직렬 큐에서 흔하게 발생하는 우선순위 역전 현상은 액터에 더 이상 찾아볼 수 없다. 액터는 재진입성이라는 특징을 활용해 작업을 요청된 순서대로가 아닌 우선순위를 고려하기 때문이다.
+
 
 
 
 
 ### 액터 홉핑(Actor Hopping)
 
-- 한 액터에서 다른 액터로 실행이 전환되는 액터 홉핑(actor hopping) 현상 -> 비효율적인 오버헤드, 스레드 컨텍스트 스위칭이 일어날 수 있음, 적절한 작업과 모델의 설계를 통해 성능 최적화 필요 (액터로 작업하는 것이 무조건적인 장점을 가지는 건 아니다!)
+한 액터에 격리된 메서드에서 다른 액터에 격리된 메서드를 호출하면서 **실행 컨텍스트(execution context)** 가 전환되는 현상을 액터 홉핑(actor hopping)이라고 합니다. 앞서 설명했듯이, 액터는 자신만의 실행자(executor)를 가지며, 외부에서 액터에 접근할 때는 해당 실행자에게 작업을 요청해야 합니다. 따라서 한 액터에서 다른 액터를 호출하면, 실행자 간 전환이 필연적으로 발생하게 되며, 이 과정에서 실행자에 속한 스레드 묶음(thread pool)도 바뀔 수 있어 스레드 컨텍스트 스위칭(thread context switching)이 일어날 수 있습니다.
 
-
-- 실제로는 더 많은 액터가 존재할 수 있습니다. 이러한 액터들은 협력형 스레드 풀에서 실행되며, 피드 액터들은 데이터베이스와 상호작용하면서 기사를 저장하거나 기타 작업을 수행할 수 있습니다. 이 과정에서 한 액터에서 다른 액터로 실행이 전환되는 액터 홉핑(actor hopping) 현상이 발생합니다.
-
-. 첫째, 액터 홉핑이 이루어지는 동안 스레드는 블로킹되지 않았습니다. 둘째, 홉핑을 위해 새로운 스레드를 생성할 필요 없이, 런타임이 스포츠 피드 액터의 작업을 일시 중단하고 데이터베이스 액터를 위한 새로운 작업을 생성하여 실행을 계속할 수 있습니다.
-
-비동기 작업이 많고 특히 경쟁 상태가 심한 경우, 시스템은 어떤 작업이 더 중요한지에 따라 적절한 트레이드-오프를 해야 합니다. 이상적으로는 사용자 상호작용과 관련된 고우선순위 작업이 백업 저장과 같은 백그라운드 작업보다 우선 처리되어야 합니다.
-
-액터 홉핑은 서로 다른 액터(각자 다른 큐/실행 컨텍스트) 간의 호출 때문에, 실행 컨텍스트가 전환되며, 이로 인해 컨텍스트 스위칭이 발생한다! 액터 홉핑 시 “다른 액터의 실행자”로 전환하는 비용
-
-- 가능하면 한 액터에서 많은 양의 일(ImageDataBase + DiskStorage) (ImageDownloader)을 처리하도록 해 액터 홉핑을 가능한 줄이는 게 좋다!
-
-
-
-####액터의 원자성(Atomicity)
-
- - 원자성(atmomicity)는 쪼갤 수 없는 작업의 수행 단위
-- 즉, 온전하게 작업을 모두 수행하거나, 아니면 작업을 아예 수행하지 않거나 둘 중 한가지의 결과만 존재해야 함. 데이터가 소실되는 상태가 되어선 안됨
-
-- 액터 내부 상태를 외부에서 바꾸길 원하는 경우, 액터의 격리 메서드에 데이터를 전달하는 방식으로 구현, 그리고 해당 격리 메서드는 외부와의 비동기적 의사소통이 필요없다면 (반드시 다른 async 함수를 호출해야 할 필요가 없다면) 실행 시작부터 끝까지 멈추지 않는 원자성을 유지해야 함
-
-```swift
+잦은 액터 홉핑은 실행 컨텍스트의 빈번한 전환을 초래하고, 이는 곧 스레드 컨텍스트 스위칭이 반복되며 높은 오버헤드로 이어질 수 있습니다. 따라서 액터 모델의 크기를 적절히 설계하여 불필요하게 자주 액터 홉핑이 발생하지 않도록 조절하는 것이 성능 비용을 최소화하는 데 매우 중요합니다.
 
 ```
-
-- 외부에서 액터 내부에 격리된 프로퍼티를 직접 수정할 수는 없고, 반드시 액터 내부 격리 메서드에 새로운 값을 전달하는 방식으로 수정해야 함. 이때 가능하면 함수가 일시 중단되지 않고 처음부터 끝까지 멈추지 않고 실행되는 원자적 형태로 구현해야 함
-
-- 액터에서 데이터를 다루는 과정에서 중간에 일시중단되었다가, 다시 재개될 때 현재 상태가 예상했던 것과 달라질 수 있음, - 액터의 재진입성
-
-```swift
-
+┌──────────────────────────────┐
+│ Main Actor (Main Thread)     │
+└──────────────────────────────┘ 
+                                 
+┌──────────────────────────────┐
+│ Cooperative Thread Pool      │
+│ (Default Executor for Swift) │
+│──────────────────────────────│
+│  Database actor              │
+│  Sports Feed actor           │
+│  Weather Feed actor          │
+│  Health Feed actor           │
+│  ...                         │ 
+└──────────────────────────────┘
 ```
 
-- 또는, actor 타입 매개변수 앞에 isolated 키워드를 붙이면 해당 전역 함수가 매개변수로 주어진 액터 인스턴스로 격리됨, 외부에 구현되어 있어도 액터 내부에 구현된 격리 메서드마냥 작동되는 특권을 얻음
+UI 업데이트와 같은 작업은 메인 액터(Main Actor)라는 특수한 유형의 액터에서 실행됩니다. 그 반면에, 우리가 작성하는 모든 액터는 기본적으로 Swift 동시성의 기본 실행자(default executor)인 협력형 스레드 풀(Cooperative Thread Pool)에서 실행됩니다. 메인 액터는 **직렬 동기 디스패치 큐(DispatchQueue.main)** 위에서 동작하며, 하나의 메인 스레드만을 사용해 UI를 업데이트합니다. 그 반면에, 협력형 스레드 풀은 **글로벌 큐(Global Queue)** 를 기반으로 하여 여러 개의 스레드를 동시에 활용할 수 있어, 일반적인 비동기 작업을 효율적으로 처리할 수 있습니다.
+ 
+ > 협력형 스레드 풀(Cooperative Thread Pool)에 대한 자세한 내용은 [Cooperative Thread Pool]()을 참조하세요. 메인 액터에 대한 자세한 내용은 [MainActor, GlobalActor]()를 참조하세요.
 
+ 
+액터 홉핑이 발생하는 경우는 크게 두 가지로 나눌 수 있습니다:
 
-```swift
+1. 메인 액터 → 일반 액터 
+    - 예를 들어, UI에서 버튼을 누른 후 네트워크 요청을 시작할 때처럼 **메인 스레드(MainActor)**에서 비동기 작업을 담당하는 액터로 전환되는 경우입니다.
+    
+2. 일반 액터 → 다른 일반 액터 
+    - 예를 들어, FeedLoaderActor가 ImageCacheActor의 메서드를 호출하는 경우처럼, 협력형 스레드 풀에서 실행 중인 액터 간에 서로 호출이 발생하는 상황입니다.
+ 
+첫 번째 경우부터 살펴보겠습니다. 메인 액터에서 일반 액터로 액터 홉핑이 발생하는 경우, 이때는 단순한 실행 컨텍스트 전환을 넘어, **스레드 컨텍스트 스위칭(thread context switching)**도 반드시 발생합니다. 그 이유는, 메인 액터는 항상 메인 스레드(1번 스레드)에서만 실행되는 반면, 협력형 스레드 풀(Cooperative Thread Pool)은 2번 스레드부터 시작해 CPU 코어 개수만큼의 스레드에서 실행되기 때문입니다.
 
-```
+따라서 다음과 같은 전환이 불가피하게 일어납니다:
 
-- actor 타입 매개변수에 isolated 키워드를 붙이면 해당 적역함수가 액터로 격리됨, 외부에 구현되어 있어도, 액터 내부에 구현된 격리 메서드라고 보아도 무방함!
+* 메인 스레드(1번) → 협력형 스레드(예: 3번 스레드)
 
-- 액터 내부의 데이터 변경은 액터의 격리 메서드로 구현해야 하고 해당 격리 메서드는 비동기적인 통신이 없다면 중간에 일시중단되면 안됨, 원자성 유지 구현 필요
+* 협력형 스레드(예: 3번 스레드) → 메인 스레드(1번)
 
+이처럼 메인 액터와 다른 액터 간의 홉핑은 항상 스레드 전환을 동반하게 되며, 이는 성능 최적화 측면에서 중요한 고려사항입니다.
+ 
+ ```swift
+// on database actor
+func loadArticle(with id: ID) async throws -> Article { ... }
 
+@MainActor
+func updateUI(for article: Article) { ... }
 
-### 액터의 재진입성(Actor Re-entrancy)
+@MainActor
+func updateArticles(for ids: [ID]) async throws {
+    for id in ids {
+        let article = try await loadArticle(with: id)  // 💥 스레드 컨텍스트 스위칭
+        await updateUI(for: article)
+    }
+}
+ ```
+ 
+ ```
+──────────────────────────────────────────────────────────────────
+| loadArticle | 💥 | updateUI | 💥 | loadArticle | 💥 | updateUI | ・・・
+──────────────────────────────────────────────────────────────────
+💥: 스레드 컨텍스트 스위칭
+ ```
+ 
+이 예제는 메인 액터에 격리된 뷰 컨트롤러가 협력형 스레드 풀에서 실행 중인 데이터베이스 액터로부터 데이터를 가져와 UI를 업데이트하는 과정을 보여줍니다. **updateArticles(for:)** 메서드에서는 for 루프를 통해 ID 목록을 순회하며, 한 번에 하나씩 기사를 비동기로 불러오고 이를 UI에 반영하고 있습니다. 루프의 각 반복에서 최소 두 번의 컨텍스트 스위칭이 발생합니다. 하나는 메인 액터에서 데이터베이스 액터로 이동하는 것이고, 다른 하나는 다시 돌아오는 것입니다. 이처럼 각 반복마다 두 번의 컨텍스트 스위칭이 필요하므로 짧은 시간 동안 두 개의 스레드가 번갈아 실행되는 패턴이 반복됩니다. 루프 반복 횟수가 적고 각 반복에서 수행하는 작업이 충분히 크다면 큰 문제가 되지 않을 수 있지만, 메인 액터에서 벗어났다 다시 돌아오는 작업이 자주 발생하면 컨텍스트 스위칭 비용이 누적되어 전체 성능에 영향을 줄 수 있습니다.
+ 
+ ```swift
+ // on database actor
+func loadArticles(with ids: [ID]) async throws -> Article { ... }
 
-- 액터 재진입은 액터의 외부 비동기적인 작업으로 인해 멈춰 있을 때, 다른 작업이 액터에 접근할 때 발생할 수 있음
-- 액터가 외부와의 비동기적 의사소통에 따라, 작업이 멈췄다가 다시 실행될 수 있으므로
-해당 비동기 작업 재개시점에 액터의 데이터(shared mutable state)가 바뀌었을 수 있음
-따라서, 액터에서 격리 메서드에서도 일시중단 지점에서 이후(await)에는 재진입성을 잘 고려해서 액터 메서드를 설계해야 함
+@MainActor
+func updateUI(for articles: [Article]) { ... }
 
-That said, actors do not like to sit around and do nothing. When we call a synchronous function on an actor that function will run start to end with no interruptions; the actor only does one thing at a time.
+@MainActor
+func updateArticles(for ids: [ID]) async throws {
+    let articles = try await loadArticle(with: ids) 
+    await updateUI(for: articles)
+}
+ ```
+ 
+  ```
+───────────────────────────────
+| loadArticle | 💥 | updateUI | (Done!)
+───────────────────────────────
+💥: 스레드 컨텍스트 스위칭
+ ```
+ 
+이 예제는 이전 코드에서 빈번하게 발생하던 컨텍스트 스위칭을 줄이기 위해 개선된 코드입니다. 애플리케이션이 컨텍스트 스위칭에 많은 시간을 소비하고 있다면, 메인 액터에서 처리할 작업을 묶어 실행하는 방식으로 코드를 재구성하는 것이 좋습니다. for 루프를 loadArticles와 updateUI 메서드 내부로 옮기고, 개별 값이 아닌 배열을 한 번에 처리하도록 변경함으로써 작업을 묶어서 실행할 수 있습니다. 이렇게 하면 컨텍스트 스위칭 횟수를 줄일 수 있어 성능이 개선됩니다.
+ 
+이번에는 일반 액터 간에 액터 홉핑이 발생하는 두 번째 경우를 살펴보겠습니다. 이 경우 실행 컨텍스트의 전환은 발생하지만, 스레드 컨텍스트 스위칭이 반드시 발생하는 것은 아닙니다. 이는 Swift의 런타임이 액터를 동일한 협력형 스레드 풀 상에서 실행시키는 기본 실행자를 사용하기 때문이며, 여러 액터가 스레드를 공유할 수 있기 때문입니다. 따라서 액터 A에서 액터 B로 홉핑하더라도, 동일한 스레드에서 실행될 가능성이 있습니다.
+ 
+ ```swift
+ 
+ ```
+ 
+> 성능이 중요한 경우, 직접 실행자(Executor)를 구현한 후, 서로 다른 액터에 해당 실행자를 지정함으로써 스레드 컨텍스트 스위칭 비용을 더욱 줄일 수 있습니다. 커스텀 실행자에 대한 자세한 내용은 [Custom Executor]() 문서를 참고하세요.
 
-However, when we introduce an async function that has a suspension point the actor will not sit around and wait for the suspension point to resume. Instead, the actor will grab the next message in its “mailbox” and start making progress on that instead. When the thing we were awaiting returns, the actor will continue working on our original function.
-
-```swift
-
-```
-
-- 액터의 재진입성에 따른 고수준의 데이터 경합을 해겨라는 방법은 (1) 재진입 시점 이후, 기존의 데이터가 바뀌었는지 확인 (2) Task의 상태를 저장하는 방식으로 구현
-
-
-- 액터의 재진입성(re-entrancy)은 교착 상태(deadlock)를 방지하고 코드가 계속 진행(forward progress)되게 하는 것을 보장하지만, 각 await 지점마다 가정이 유지되는지 확인해야 합니다.
- 재진입을 잘 설계하려면 액터 상태의 변경을 동기 코드 내에서 수행해야 합니다. 이상적으로, 모든 상태 변경을 동기 함수 내부에서 수행하게 하여 상태 변경이 캡슐화될 수 있도록 하는 게 좋습니다.
-  상태 변경은 일시적으로 액터를 일관되지 않은 상태로 만들 수 있으므로, await 이전에는 반드시 상태의 일관성을 회복해야 합니다.
-
-Actor reentrancy is a feature of actors that can lead to subtle bugs and unexpected results. Due to actor reentrancy we need to be very careful when we’re adding async methods to an actor, and we need to make sure that we think about what can and should happen when we have multiple, reentrant, calls to a specific function on an actor.
-
-Sometimes this is completely fine, other times it’s wasteful but won’t cause problems. Other times, you’ll run into problems that arise due to certain state on your actor being changed while your function was suspended. Every time you await something inside of an actor it’s important that you ask yourself whether you’ve made any state related assumptions before your await that you need to reverify after your await.
-
-
-
+> 💡 **Note:** 액터 홉핑에 관한 자세한 내용은 [Actor Hopping]() 프로젝트를 참조하세요.
 
 
 #### 액터 경합(Actor Contention)
 
-- 액터 내부에서는 직렬 실행자 때문에 병렬 처리의 성능상 이점을 얻기 힘든 단점도 존재함 (병렬 처리가 필요한 작업은 액터 외부로 보내서 처리해야 함)
+액터는 한 번에 하나의 작업만 순차적으로 실행할 수 있다는 특성을 가지고 있습니다. 이 말은 곧, 액터 내부에서 어떤 작업이 수행 중이라면, 다른 작업은 그 작업이 완료될 때까지 대기해야 한다는 뜻입니다. 이는 액터에 내장된 직렬 실행자(Serial Executor) 가 모든 작업을 순서대로 처리하기 때문이며, 이로 인해 병렬 처리의 이점을 얻기 어려운 단점이 있습니다. 따라서 병렬성이 중요한 작업이라면, 해당 작업을 액터 외부 컨텍스트에서 처리하고, 액터 내부에서는 정말 필요한 부분만 실행하는 방식이 바람직합니다. 가능한 한 작은 단위로 액터에 접근함으로써 경합을 줄이고 성능을 향상시킬 수 있습니다. 특히 비동기 작업이 많고 경쟁 상태가 빈번하게 발생하는 시스템에서는, 어떤 작업을 우선 처리할지에 대한 우선순위 트레이드오프가 필요합니다. 이상적인 경우라면, 사용자 상호작용과 관련된 고우선순위 작업이 백업 저장과 같은 백그라운드 작업보다 먼저 처리되어야 시스템 반응성을 유지할 수 있습니다.
 
-- 외부 Task에서 작업을 하다가 정말로 필요한 부분만 액터에서 실행시키도록 하면 좋음, 그래서 가능하면 액터에 접근할 때 가능한 한 작은 단위로 나누어서 접근을 하는 게 좋음
+> 💡 **Note:** 액터 경합에 관한 자세한 내용은 [Actor Contention]() 프로젝트를 참조하세요.
 
-- 
+
+<br>
+<br>
+
+---
+
+### [부록] 액터의 원자성(Atomicity)
+
+원자성(Atomicity) 이란, 하나의 작업이 모든 단계를 완전히 수행하거나, 전혀 수행되지 않은 상태로 남아야 함을 의미합니다. 즉, 작업 도중 실패가 발생하면 그 이전까지 수행된 모든 작업도 함께 롤백(rollback) 되어, 원래 상태로 복원되어야 합니다. 흔히 “All or Nothing”이라고 표현되죠. 예를 들어, 디스크에 파일을 생성하거나 쓸 때 원자적 연산은 매우 중요합니다. 파일이 반만 쓰이는 일은 없어야 하기 때문입니다. 그렇지 않으면 파일이 손상되어 열 수 없는 상태가 되겠죠?
+
+```
+Counter actor
+---------------------------------
+| increment1️⃣ | 💥suspend --- | increment2️⃣ | 💥suspend --- ✨resume | increment1️⃣ | --- ✨resume | increment2️⃣ |
+---------------------------------
+```
+
+액터도 마찬가지입니다. 액터 내부에서 상태를 생성하거나 수정해야 한다면, 이 모든 연산은 원자적으로 수행되어야 합니다. 즉, 상태를 변경하는 도중에 await 키워드를 만나 작업이 일시 중단(suspend) 되고, 이후 다른 컨텍스트에서 재개(resume) 되는 일이 없어야 합니다. 왜냐하면 작업이 중단되고 있는 사이, 동일한 액터에 접근한 다른 작업이 상태를 바꾸어 버릴 수 있기 때문입니다. 이런 경우, 액터 내부의 데이터가 예기치 않게 덮어써지는 버그가 발생할 수 있습니다.
+
+```
+extension Counter {
+    func increment(random range: Range<Int>) async {
+        var newValue = value
+        let randomNumber = await randomNumber(range) // 💥 원자성 깨짐!
+        newValue += randomNumber  // 😦 오래된 값으로 덮어쓰기
+        value = newValue
+    }
+}
+```
+
+위 예제는 액터의 원자성이 깨지는 대표적인 사례입니다. increment(random:) 메서드는 먼저 value를 읽고, 서버로부터 랜덤 숫자를 받아온 뒤, 이 값을 더해 다시 value를 갱신합니다. 하지만 이 과정에서 await가 호출되는 동안 increment1️⃣은 일시 중단되고, 그 사이에 increment2️⃣가 실행되어 value를 바꾸게 되면, increment1️⃣가 재개될 때 오래된 값을 기반으로 상태를 덮어쓰게 되는 문제가 발생합니다.
+
+```swift
+extension Counter {
+    func increment(random range: Range<Int>) async {
+        let randomNumber = await randomNumber(range)
+        value += randomNumber
+    }
+}
+```
+
+이처럼 잠재적인 버그를 방지하려면, 데이터를 가져오고 수정하는 로직을 중간에 일시 중단 없이 원자적으로 수행해야 합니다. 격리된 메서드에서는 비동기 호출이 없다면 중단이 일어나지 않도록 구성해야 하며, 이를 통해 액터의 원자성을 지키는 구현이 필요합니다.
