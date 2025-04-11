@@ -20,9 +20,6 @@
 * [AsyncSequence](programming-guide/AsyncSequence.md) <br> (내용)
 * [AsyncStream](programming-guide/AsyncStream.md) <br> (내용)
 * [Actor](programming-guide/Actor.md) ([Syntax Rules](programming-guide/Actor-Syntax-Rules.md)) <br> 동시성 문제를 원천적으로 차단하는 새로운 타입을 알아봅시다.
-* [MainActor, GlobalActor](programming-guide/MainActor-GlobalActor.md) <br> (내용)
-* [Custom Executor](programming-gude/Custom-Executor.md) <br> (내용)
-* [sending, @isolated(any), nonisolated(unsafe)](Appendix/sending-isolated(any)-nonisolated(unsafe).md) <br> (내용) 
 
 ### 📚 Appendix
 
@@ -35,8 +32,7 @@
 
 * [Image](projects/image/image) <br> 컬렉션 뷰에서 이미지를 불러오고, 취소하는 방법을 알아봅시다. Actor를 활용해 공유 가변 상태에 안전하게 접근하고, 액터의 재진입성 문제를 해결해 봅시다.
 * [Map](projects/Map/Map) <br> 기존 델리게이트 방식의 API를 async/await으로 변환해 봅시다.
-* [Actor Hopping](projects/actorHopping) <br> (내용) 
-* [Actor Contention](projects/actorContention) <br> (내용) 
+* [CompressFile](projects/compressFile) <br> (내용) 
 
 
 ### 📚 References
