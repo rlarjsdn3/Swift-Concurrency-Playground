@@ -19,7 +19,7 @@
 * [Sendable](programming-guide/Sendable.md) <br> 동시성 환경에서 안전하게 전달될 수 있는 타입임을 나타내는 프로토콜입니다.
 * [AsyncSequence](programming-guide/AsyncSequence.md) <br> (내용)
 * [AsyncStream](programming-guide/AsyncStream.md) <br> (내용)
-* [Actor](programming-guide/Actor.md) ([Syntax Rules](programming-guide/Actor-Syntax-Rules.md)) <br> (내용)
+* [Actor](programming-guide/Actor.md) ([Syntax Rules](programming-guide/Actor-Syntax-Rules.md)) <br> 동시성 문제를 원천적으로 차단하는 새로운 타입을 알아봅시다.
 * [MainActor, GlobalActor](programming-guide/MainActor-GlobalActor.md) <br> (내용)
 * [Custom Executor](programming-gude/Custom-Executor.md) <br> (내용)
 * [sending, @isolated(any), nonisolated(unsafe)](Appendix/sending-isolated(any)-nonisolated(unsafe).md) <br> (내용) 
