@@ -57,7 +57,7 @@ class CompressionState: ObservableObject {
             // 반면 `Task.detached`는 각 파일 압축 작업을 동시에 실행하고, 완료되는 대로 개별적으로 저장 및 UI 업데이트가 가능합니다.
             
             Task.detached {
-                let compressedData = await  self.compressor.compress(with: file)
+                let compressedData = await self.compressor.compress(with: file)
                 await self.save(compressedData, to: file.name)
             }
         }

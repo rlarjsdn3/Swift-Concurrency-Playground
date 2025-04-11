@@ -12,7 +12,7 @@ actor CompressionUtils {
     // 로그 상태를 저장하는 배열
     var logs: [String] = []
     
-    unowned var state: CompressionState
+    unowned let state: CompressionState
     
     init(state: CompressionState) {
         self.state = state
@@ -27,19 +27,21 @@ actor CompressionUtils {
     nonisolated func compress(with file: FileStatus) async -> Data {
         await log(update: "🔴 압축 시작: \(file.name)")
         let compressedData = compressFile(
-            for: file) { size in
-                Task { @MainActor in
-                    await state.update(name: file.name, uncompressedSize: size)
-                }
-            } progressNotification: { progress in
-                Task { @MainActor in
-                    await state.update(name: file.name, progress: progress)
-                }
-            } finalNotification: { size in
-                Task { @MainActor in
-                    await state.update(name: file.name, compressedSize: size)
-                }
+            for: file
+        ) { size in
+            Task { @MainActor in
+                state.update(name: file.name, uncompressedSize: size)
             }
+        } progressNotification: { progress in
+            Task { @MainActor in
+                state.update(name: file.name, progress: progress)
+                await log(update: "🔵 압축 진행 중: \(progress)")
+            }
+        } finalNotification: { size in
+            Task { @MainActor in
+                state.update(name: file.name, compressedSize: size)
+            }
+        }
         await log(update: "🔵 압축 완료: \(file.name)")
         
         return compressedData
