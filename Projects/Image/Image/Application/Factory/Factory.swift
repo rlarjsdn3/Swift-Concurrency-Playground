@@ -10,8 +10,8 @@ import Foundation
 @MainActor final class Factory {
     
     static func makeImageViewController() -> ImageViewController {
-        let imageDownloader = DefaultImageDownloader()
-        let imageViewModel = ImageViewModel(imageDownloader: imageDownloader)
+        let imageDatabase = ImageDatabase.shared
+        let imageViewModel = ImageViewModel(imageDatabase: imageDatabase)
         let imageViewController = ImageViewController(viewModel: imageViewModel)
         return imageViewController
     }

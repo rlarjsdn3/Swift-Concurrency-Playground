@@ -11,18 +11,33 @@ import Foundation
     
     // MARK: - Properties
     
-    private let imageDownloader: ImageDownloader
+    private let imageDatabase: ImageDatabase
     
+    private var imageURLs: [String] = []
     private var imageTasks: [IndexPath: Task<Data?, Never>] = [:]
     
     // MARK: - Intializer
     
-    init(imageDownloader: ImageDownloader) {
-        self.imageDownloader = imageDownloader
+    init(imageDatabase: ImageDatabase) {
+        self.imageDatabase = imageDatabase
+        
+        _ = loadURLs()
     }
 }
 
 extension ImageViewModel {
+    
+    private func loadURLs() -> [String] {
+        guard let url = Bundle.main.url(forResource: "Photos", withExtension: "plist"),
+              let contents = try? Data(contentsOf: url),
+              let plist = try? PropertyListSerialization.propertyList(from: contents, format: nil),
+              let imageURLs = plist as? [String] else {
+            return []
+        }
+        
+        self.imageURLs = imageURLs
+        return imageURLs
+    }
     
     func downloadImage(at indexPath: IndexPath) async -> Data? {
         if let existingTask = imageTasks[indexPath] {
@@ -30,9 +45,8 @@ extension ImageViewModel {
         }
         
         let task = Task {
-            // print("ImageViewModel: \(Thread.isMainThread)")
             defer { imageTasks[indexPath] = nil }
-            return try? await imageDownloader.downloadImage(at: indexPath.row)
+            return try? await imageDatabase.image(from: imageURLs[indexPath.row])
         }
         
         imageTasks[indexPath] = task

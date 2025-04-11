@@ -65,7 +65,6 @@ final class PinterestLayout: UICollectionViewFlowLayout {
     // MARK: - Prepare
     
     override func prepare() {
-        print(#function)
         guard
             cache.isEmpty,
             let collectionView = collectionView
@@ -117,7 +116,6 @@ final class PinterestLayout: UICollectionViewFlowLayout {
     // MARK: - Layout Attributes for Elements
     
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
-        print(#function)
         var visibleLayoutAttributes: [UICollectionViewLayoutAttributes] = []
         
         // Loop through the cache and look for items in the rect
@@ -129,9 +127,8 @@ final class PinterestLayout: UICollectionViewFlowLayout {
         return visibleLayoutAttributes
     }
     
-//    override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
-//        print(#function)
-//        return cache[indexPath.item]
-//    }
+    override func layoutAttributesForItem(at indexPath: IndexPath) -> UICollectionViewLayoutAttributes? {
+        return cache[indexPath.item]
+    }
     
 }

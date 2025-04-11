@@ -34,6 +34,7 @@ class ImageViewController: UIViewController {
         super.viewDidLoad()
         
         setupUI()
+        setupData()
     }
     
     // MARK: - Private
@@ -53,6 +54,12 @@ class ImageViewController: UIViewController {
         )
         collectionView.delegate = self
         collectionView.dataSource = self
+    }
+    
+    private func setupData() {
+        Task {
+            try? await ImageDatabase.shared.setupInitialData()
+        }
     }
 
 
@@ -94,7 +101,6 @@ extension ImageViewController: UICollectionViewDelegate {
         let cell = cell as! ImageCell
         
         Task {
-            // print("ImageViewController: \(Thread.isMainThread)")
             if let data = await viewModel.downloadImage(at: indexPath) {
                 let image = UIImage(data: data)!
                 cell.updateCell(with: image)
