@@ -30,6 +30,5 @@
 * [Image](projects/image/image) <br> 컬렉션 뷰에서 이미지를 불러오고, 취소하는 방법을 알아봅시다. 액터를 활용해 캐시에 안전하게 접근하고, 액터의 재진입성으로 인해 발생하는 문제를 해결해 봅시다.
 * [Map](projects/Map/Map) <br> 기존 델리게이트 방식의 API를 async/await으로 변환해 봅시다.
 * [FileCompressor](projects/FileCompressor) <br> 액터 경합(Actor Contention)으로 인해 발생하는 성능 문제를 최적화해봅시다. 
-
-
+* [LocationApp](projects/LocationApp) <br> AsyncStream을 활용해 위치 정보를 비동기적으로 지속적으로 받아오는 구조를 구현해봅시다.
 
