@@ -54,3 +54,10 @@ extension MyDelegate: UICollectionViewDelegate {
 썸네일 로딩 작업은 일반적인 `Task`로 실행되며, 이는 취소가 가능합니다. 썸네일이 성공적으로 로딩되면, 이 이미지를 디스크에 저장하는 작업을 `Task.detached`로 실행합니다.
 
 `writeToLocalCache(_:)`는 디스크 I/O와 같은 **무거운 백그라운드 작업**입니다. 이 작업은 **UI 컨텍스트나 우선순위의 영향을 받지 않아도 되는 독립 작업**이므로, `Task.detached(priority: .background)`로 분리하여 처리합니다.
+
+
+## 선호하는 작업 실행자
+
+
+
+
